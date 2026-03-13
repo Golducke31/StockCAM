@@ -21,7 +21,6 @@ st.markdown("""
         margin-bottom: 12px; border-left: 6px solid #58a6ff; border: 1px solid #30363d;
     }
     .stButton > button { border-radius: 12px; font-weight: bold; width: 100%; height: 3.5em; border: none; }
-    /* Botón Guardar Verde */
     div.stButton > button:first-child {
         background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
         color: white;
@@ -31,7 +30,7 @@ st.markdown("""
     
     <div class="header-container">
         <h1 style='margin:0; color: white; font-size: 26px;'>BERARDI S.A.</h1>
-        <p style='margin:0; color: #58a6ff; font-weight: 500;'>Control de Cámaras v2.1</p>
+        <p style='margin:0; color: #58a6ff; font-weight: 500;'>Control de Cámaras v2.2</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -50,25 +49,19 @@ def cargar_datos():
 
 def guardar_datos(df): df.to_csv(DB_FILE, index=False)
 
-# 3. LÓGICA DE ESTADO (Para Edición)
 if "edit_id" not in st.session_state: st.session_state.edit_id = None
-
 df_actual = cargar_datos()
 
-# 4. FORMULARIO DINÁMICO
+# 3. FORMULARIO
 st.markdown(f"### {'📝 EDITANDO ID: ' + str(st.session_state.edit_id) if st.session_state.edit_id else '📥 NUEVO REGISTRO'}")
 
-# Precarga de datos si estamos editando
 if st.session_state.edit_id:
     val_viejo = df_actual[df_actual["ID"] == st.session_state.edit_id].iloc[0]
     idx_tipo = ["📥 Ingreso", "🔄 Transf.", "🔙 Devol.", "📤 Salida"].index(val_viejo["Tipo"])
 else:
-    val_viejo = None
-    idx_tipo = 0
+    val_viejo, idx_tipo = None, 0
 
 tipo_op = st.radio("OPERACIÓN:", ["📥 Ingreso", "🔄 Transf.", "🔙 Devol.", "📤 Salida"], index=idx_tipo, horizontal=True)
-
-st.markdown("---")
 
 with st.container():
     c1, c2 = st.columns(2)
@@ -79,85 +72,78 @@ with st.container():
     with ck: kgs = st.number_input("Kilos Netos:", min_value=0.0, step=0.5, value=float(val_viejo["Kgs"]) if val_viejo is not None else 0.0)
     with cb: bultos = st.number_input("Bultos:", min_value=0, step=1, value=int(val_viejo["Bultos"]) if val_viejo is not None else 0)
     
-    # --- LOGÍSTICA DE CÁMARAS MEJORADA ---
-    st.markdown("<p style='color: #58a6ff; font-weight: bold; margin-top:15px;'>UBICACIÓN Y MOVIMIENTO</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #58a6ff; font-weight: bold; margin-top:15px;'>LOGÍSTICA</p>", unsafe_allow_html=True)
     
-    if "Transf" in tipo_op:
-        col_orig, col_dest = st.columns(2)
-        with col_orig: 
-            orig = st.selectbox("Desde (Origen):", ["Cámara 2", "Cámara 3", "Cámara 4"], 
-                               index=(["Cámara 2", "Cámara 3", "Cámara 4"].index(val_viejo["Origen"]) if val_viejo is not None and val_viejo["Origen"] in ["Cámara 2", "Cámara 3", "Cámara 4"] else 0))
-        with col_dest: 
-            dest = st.selectbox("Hacia (Destino):", ["Cámara 2", "Cámara 3", "Cámara 4"], 
-                               index=(["Cámara 2", "Cámara 3", "Cámara 4"].index(val_viejo["Destino"]) if val_viejo is not None and val_viejo["Destino"] in ["Cámara 2", "Cámara 3", "Cámara 4"] else 1))
+    col_o, col_d = st.columns(2)
+    
+    if "Ingreso" in tipo_op:
+        with col_o: 
+            orig = st.selectbox("Origen:", ["Producción", "Proveedor", "Rouco"])
+        with col_d: 
+            dest = st.selectbox("Destino:", ["Cámara 2", "Cámara 3", "Cámara 4"])
+            
+    elif "Transf" in tipo_op:
+        with col_o: 
+            orig = st.selectbox("Desde:", ["Cámara 2", "Cámara 3", "Cámara 4"])
+        with col_d: 
+            dest = st.selectbox("Hacia:", ["Cámara 2", "Cámara 3", "Cámara 4"], index=1)
+            
     elif "Salida" in tipo_op:
-        orig = st.selectbox("Extraer de:", ["Cámara 2", "Cámara 3", "Cámara 4"])
-        dest = "EXPEDICIÓN / VENTA"
-    else: # Ingresos y Devoluciones
-        orig = "EXTERNO / CLIENTE"
-        dest = st.selectbox("Ingresa a:", ["Cámara 2", "Cámara 3", "Cámara 4"])
+        with col_o: 
+            orig = st.selectbox("Extraer de:", ["Cámara 2", "Cámara 3", "Cámara 4"])
+        with col_d: 
+            dest = st.text_input("Destino:", value="Expedición", disabled=True)
+            
+    else: # Devolución
+        with col_o: 
+            orig = st.text_input("Origen:", value="Cliente / Externo")
+        with col_d: 
+            dest = st.selectbox("Ingresa a:", ["Cámara 2", "Cámara 3", "Cámara 4"])
 
-    pos = st.text_input("Posición específica:", value=val_viejo["Pos"] if val_viejo is not None else "", placeholder="Ej: Fila A, Estante 3")
+    pos = st.text_input("Posición:", value=val_viejo["Pos"] if val_viejo is not None else "", placeholder="Ej: Fila A-3")
 
-# BOTONES DE ACCIÓN
-col_btn1, col_btn2 = st.columns([3, 1])
-with col_btn1:
-    txt_boton = "💾 ACTUALIZAR REGISTRO" if st.session_state.edit_id else "💾 GUARDAR MOVIMIENTO"
-    if st.button(txt_boton):
+# BOTONES
+c_b1, c_b2 = st.columns([3, 1])
+with c_b1:
+    if st.button("💾 ACTUALIZAR" if st.session_state.edit_id else "💾 GUARDAR"):
         if kgs > 0 or bultos > 0:
-            if st.session_state.edit_id: # Lógica Modificar
+            if st.session_state.edit_id:
                 df_actual.loc[df_actual["ID"] == st.session_state.edit_id, ["Tipo", "Producto", "Kgs", "Bultos", "Origen", "Destino", "Pos"]] = [tipo_op, prod, kgs, bultos, orig, dest, pos]
                 st.session_state.edit_id = None
-                st.success("Registro actualizado correctamente")
-            else: # Lógica Nuevo
+            else:
                 nuevo_id = int(df_actual["ID"].max() + 1) if not df_actual.empty else 101
                 nuevo_reg = {"ID": nuevo_id, "Fecha": datetime.now().strftime("%H:%M - %d/%m"), "Tipo": tipo_op, "Producto": prod, "Kgs": kgs, "Bultos": bultos, "Origen": orig, "Destino": dest, "Pos": pos}
                 df_actual = pd.concat([df_actual, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                st.success(f"ID {nuevo_id} guardado con éxito")
-            
             guardar_datos(df_actual)
             st.rerun()
-        else:
-            st.error("Debe ingresar Kilos o Bultos")
 
-with col_btn2:
-    if st.session_state.edit_id:
-        if st.button("❌"):
-            st.session_state.edit_id = None
-            st.rerun()
+with c_b2:
+    if st.session_state.edit_id and st.button("❌"):
+        st.session_state.edit_id = None
+        st.rerun()
 
-# 5. GESTIÓN DE REGISTROS (EDITAR / ELIMINAR)
+# GESTIÓN Y LISTADO
 st.markdown("---")
 if not df_actual.empty:
-    with st.expander("🗑️ MODIFICAR O ELIMINAR REGISTROS"):
-        ids = df_actual["ID"].astype(int).tolist()[::-1]
-        id_sel = st.selectbox("Seleccione ID:", ids)
-        
-        c_ed, c_del = st.columns(2)
-        with c_ed:
-            if st.button("✏️ EDITAR", key="btn_edit_footer"):
-                st.session_state.edit_id = id_sel
-                st.rerun()
-        with c_del:
-            if st.button("🗑️ BORRAR", type="secondary"):
-                df_actual = df_actual[df_actual["ID"] != id_sel]
-                guardar_datos(df_actual)
-                st.warning(f"ID {id_sel} eliminado")
-                st.rerun()
+    with st.expander("🛠️ EDITAR / ELIMINAR"):
+        id_sel = st.selectbox("Seleccionar ID:", df_actual["ID"].astype(int).tolist()[::-1])
+        c_e, c_d = st.columns(2)
+        if c_e.button("✏️ EDITAR"):
+            st.session_state.edit_id = id_sel
+            st.rerun()
+        if c_d.button("🗑️ BORRAR", type="secondary"):
+            df_actual = df_actual[df_actual["ID"] != id_sel]
+            guardar_datos(df_actual)
+            st.rerun()
 
-    # 6. HISTORIAL VISUAL
     st.markdown("### 🕒 Últimos Movimientos")
     for _, row in df_actual.tail(3).iloc[::-1].iterrows():
-        c_lat = "#238636" if "Ingreso" in row['Tipo'] else "#da3633" if "Salida" in row['Tipo'] else "#1f6feb"
+        color = "#238636" if "Ingreso" in row['Tipo'] else "#da3633" if "Salida" in row['Tipo'] else "#1f6feb"
         st.markdown(f"""
-            <div class="history-card" style="border-left-color: {c_lat};">
-                <div style="display: flex; justify-content: space-between;">
-                    <span style="color: #58a6ff; font-weight: bold;">ID: {int(row['ID'])}</span>
-                    <span style="color: #8b949e; font-size: 0.8rem;">{row['Fecha']}</span>
-                </div>
-                <strong style="font-size: 1.1rem;">{row['Producto']}</strong><br>
+            <div class="history-card" style="border-left-color: {color};">
+                <strong>ID: {int(row['ID'])} | {row['Tipo']}</strong><br>
+                <span style="font-size: 1.1rem;">{row['Producto']}</span><br>
                 <span>{row['Kgs']} Kg | {row['Bultos']} Bultos</span><br>
-                <small style="color: #8b949e;">De: {row['Origen']} ➡️ A: {row['Destino']}</small><br>
-                <small style="color: #8b949e;">📍 {row['Pos']}</small>
+                <small style="color: #8b949e;">{row['Origen']} ➡️ {row['Destino']} ({row['Pos']})</small>
             </div>
         """, unsafe_allow_html=True)
